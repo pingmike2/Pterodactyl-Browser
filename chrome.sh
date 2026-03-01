@@ -36,7 +36,7 @@ clean_screen() {
 echo_env_vars() {
 	export ARGO_AUTH="${ARGO_AUTH:-''}"
 	export CM_PASS="${CM_PASS:-Ww112211}"
-	export CM_PORT="${CM_PORT:-9010}"
+	export CM_PORT="${CM_PORT:-9020}"
 	[ -n "$ARGO_AUTH" ] && echo "  ARGO_AUTH=$ARGO_AUTH"
 	[ -n "$CM_PORT" ]   && echo "  CM_PORT=$CM_PORT"
 }
