@@ -127,7 +127,7 @@ run_remote() {
 	runcftunnel "$1"
 	cd "${PROOT_DIR}"
 
-	_VNC_RES="${VNC_RESOLUTION:-1280x720}"
+	_VNC_RES="${VNC_RESOLUTION:-1920x1080}"
 	_VNC_W=$(echo "$_VNC_RES" | cut -d'x' -f1)
 	_VNC_H=$(echo "$_VNC_RES" | cut -d'x' -f2)
 	_VNC_DEPTH="${VNC_DEPTH:-16}"
@@ -278,7 +278,7 @@ start_services() {
     apk add --no-cache caddy
     generate_caddy_config \$basedir
     export SERVICECMD="caddy run --config \${basedir}/Caddyfile"
-    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
     echo "✅ noVNC 已就绪，访问: http://0.0.0.0:\${CM_PORT}/index.html"
   fi
 }
