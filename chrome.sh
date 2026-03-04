@@ -226,7 +226,7 @@ start_services() {
     --disable-gpu \
     --disable-software-rasterizer \
     --disable-background-networking \
-    --js-flags=--max-old-space-size=512"
+    --js-flags=--max-old-space-size=1024"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
   mkdir -p "\$PWD/.cache"
   sed -i "1a export TMPDIR=\$PWD/.cache" /etc/service/chromium-browser/run
