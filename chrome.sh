@@ -225,7 +225,6 @@ start_services() {
     --disable-dev-shm-usage \
     --disable-gpu \
     --disable-software-rasterizer \
-    --disable-extensions \
     --disable-background-networking \
     --js-flags=--max-old-space-size=512"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
