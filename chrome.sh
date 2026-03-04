@@ -30,7 +30,7 @@ echo_env_vars() {
 }
 
 # ============================================================
-# proot 环境初始化（已存在则跳过）
+# proot 环境初始化
 # ============================================================
 setgamehostproot() {
 	mkdir -p /home/container/.tmp
@@ -108,166 +108,6 @@ runcftunnel() {
 }
 
 # ============================================================
-# 内嵌 runchrome_runit.sh（优化版，不再远程拉取）
-# ============================================================
-RUNCHROME_SCRIPT='#!/bin/sh
-set -eu
-
-MODE="$1"
-CM_PORT="${CM_PORT:-${SERVER_PORT:-8080}}"
-CM_PASS="${CM_PASS:-}"
-VNC_RESOLUTION="${VNC_RESOLUTION:-1280x720}"
-VNC_DEPTH="${VNC_DEPTH:-16}"
-
-generate_caddy_config() {
-  [ -z "$CM_PASS" ] && echo "❌ CM_PASS 未设置" && return 1
-  PORT="${CM_PORT:-8081}"
-  HASH=$(caddy hash-password --plaintext "$CM_PASS")
-  [ -z "$HASH" ] && echo "❌ 密码加密失败" && return 1
-  rm -rf $1/Caddyfile
-  cat <<EOF > $1/Caddyfile
-:$PORT {
-  @protected {
-    not path /websockify*
-  }
-  basicauth @protected {
-    chromium $HASH
-  }
-  root * $1/novnc
-  file_server
-  handle_path /websockify* {
-    reverse_proxy localhost:5902
-  }
-}
-EOF
-  echo "✅ Caddyfile 已生成，监听端口 $PORT，用户名 chromium"
-}
-
-enable_autoconnect() {
-  local file="${1:-index.html}"
-  if command -v perl >/dev/null 2>&1; then
-    perl -i -pe "$_ = \"\" if /defaults\[\"autoconnect\"\]/ && $. != 85;
-                 $_ = \"defaults[\\\"autoconnect\\\"] = true;\n\" if $. == 85;" "$file"
-  elif command -v sed >/dev/null 2>&1; then
-    grep -q "defaults\[\"autoconnect\"\]" "$file" || \
-      sed -i "85i defaults[\"autoconnect\"] = true;" "$file"
-  fi
-}
-
-start_services() {
-  echo "🚀 启动 Chromium + TigerVNC + Openbox..."
-
-  # 已安装则跳过，加快重启速度
-  if ! command -v chromium-browser >/dev/null 2>&1; then
-    apk update
-    apk add --no-cache chromium git python3 py3-pip bash ttf-dejavu websockify curl \
-      font-noto-emoji font-noto-cjk
-    apk add --no-cache mesa mesa-gl mesa-egl libx11 libxext libxrender \
-      tigervnc openbox xdpyinfo pciutils-dev st xdotool
-    fc-cache -fv
-  else
-    echo "✅ 软件包已存在，跳过安装"
-  fi
-
-  [ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
-  curl -LSs https://gbjs.serv00.net/tar/cm_menu.xml -o ~/.config/openbox/menu.xml
-
-  # 启动 TigerVNC（降低分辨率和色深提升流畅度）
-  export SERVICECMD="Xvnc :1 -geometry ${VNC_RESOLUTION} -depth ${VNC_DEPTH} -SecurityTypes None"
-  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
-
-  export DISPLAY=:1
-  for i in $(seq 1 15); do
-    if xdpyinfo > /dev/null 2>&1; then
-      echo "✅ Xvnc 已就绪，启动 Openbox..."
-      break
-    fi
-    echo "⏳ 等待 Xvnc 初始化... (${i}/15)"
-    sleep 1
-  done
-
-  # 启动 Openbox
-  export SERVICECMD="openbox"
-  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
-  sed -i "1a export DISPLAY=:1" /etc/service/openbox/run
-
-  # 启动 Chromium（针对无GPU容器优化）
-  export SERVICECMD="chromium-browser \
-    --no-sandbox \
-    --start-maximized \
-    --window-size=${VNC_RESOLUTION/x/,} \
-    --disable-dev-shm-usage \
-    --disable-gpu \
-    --disable-software-rasterizer \
-    --disable-extensions \
-    --disable-background-networking \
-    --js-flags=--max-old-space-size=512"
-  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
-  mkdir -p "$PWD/.cache"
-  sed -i "1a export TMPDIR=$PWD/.cache" /etc/service/chromium-browser/run
-  sed -i "1a export DISPLAY=:1" /etc/service/chromium-browser/run
-
-  basedir=$(pwd)
-
-  # 下载 noVNC（已存在则跳过）
-  if [ ! -d "./novnc" ]; then
-    echo "下载 noVNC..."
-    if timeout 10s git clone --depth=1 https://github.com/novnc/noVNC.git ./novnc 2>/dev/null; then
-      echo "✅ noVNC 克隆成功"
-    else
-      echo "⚠️ GitHub 超时，使用备用源..."
-      wget -O noVNC.tar.gz https://gbjs.serv00.net/tar/noVNC-1.6.0.tar.gz
-      mkdir -p novnc
-      tar -xzf noVNC.tar.gz -C ./novnc --strip-components=1
-      rm noVNC.tar.gz
-    fi
-  else
-    echo "✅ noVNC 已存在，跳过下载"
-  fi
-
-  cd novnc || { echo "❌ 无法进入 novnc 目录"; exit 1; }
-  if [ -f "vnc.html" ] && [ ! -f "index.html" ]; then
-    mv vnc.html index.html
-    enable_autoconnect
-  fi
-  wwwdir=$(pwd)
-
-  if [ -z "$CM_PASS" ]; then
-    export SERVICECMD="websockify --web ${wwwdir} ${CM_PORT} localhost:5901"
-    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
-    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:${CM_PORT}/index.html"
-  else
-    export SERVICECMD="websockify 5902 localhost:5901"
-    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
-    apk add --no-cache caddy
-    generate_caddy_config $basedir
-    export SERVICECMD="caddy run --config ${basedir}/Caddyfile"
-    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
-    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:${CM_PORT}/index.html"
-  fi
-}
-
-stop_services() {
-  echo "🛑 停止所有服务..."
-  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s stop
-  rm -rf /etc/service
-  echo "✅ 所有进程已清理"
-}
-
-runit_status() {
-  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s list
-}
-
-case "$MODE" in
-  start)   start_services ;;
-  stop)    stop_services ;;
-  restart) stop_services; sleep 1; start_services ;;
-  status)  runit_status ;;
-  *) echo "用法: $0 {start|stop|restart|status}"; exit 1 ;;
-esac
-'
-
-# ============================================================
 # 主流程
 # ============================================================
 run_remote() {
@@ -290,9 +130,172 @@ run_remote() {
 	[ -e /tmp/cm_pipe ] && rm -f /tmp/cm_pipe
 	mkfifo /tmp/cm_pipe
 
-	# 将内嵌脚本写入 proot 内部，避免每次远程拉取
-	INNER_SCRIPT_PATH="${PROOT_DIR}/rootfs/tmp/runchrome_runit.sh"
-	echo "$RUNCHROME_SCRIPT" > "$INNER_SCRIPT_PATH"
+	# 将 runchrome 脚本写入 proot rootfs 内，用 bash heredoc 避免变量展开问题
+	# 修复1: 路径改为 rootfs/root/ 确保 proot 内 /root/ 可访问
+	# 修复2: 用 printf 写入避免 echo 转义问题
+	INNER_SCRIPT_PATH="${PROOT_DIR}/rootfs/root/runchrome_runit.sh"
+
+	# 解析分辨率为 WIDTHxHEIGHT 和 WIDTH,HEIGHT 两种格式（兼容 sh）
+	_VNC_RES="${VNC_RESOLUTION:-1280x720}"
+	_VNC_W=$(echo "$_VNC_RES" | cut -d'x' -f1)
+	_VNC_H=$(echo "$_VNC_RES" | cut -d'x' -f2)
+	_VNC_DEPTH="${VNC_DEPTH:-16}"
+	_CM_PORT="${CM_PORT:-9020}"
+	_CM_PASS="${CM_PASS:-}"
+
+	cat > "$INNER_SCRIPT_PATH" << INNEREOF
+#!/bin/sh
+set -eu
+
+MODE="\$1"
+CM_PORT="${_CM_PORT}"
+CM_PASS="${_CM_PASS}"
+VNC_W="${_VNC_W}"
+VNC_H="${_VNC_H}"
+VNC_DEPTH="${_VNC_DEPTH}"
+VNC_RESOLUTION="\${VNC_W}x\${VNC_H}"
+
+generate_caddy_config() {
+  [ -z "\$CM_PASS" ] && echo "CM_PASS not set" && return 1
+  HASH=\$(caddy hash-password --plaintext "\$CM_PASS")
+  [ -z "\$HASH" ] && echo "hash failed" && return 1
+  rm -rf \$1/Caddyfile
+  cat > \$1/Caddyfile << EOF
+:\$CM_PORT {
+  @protected {
+    not path /websockify*
+  }
+  basicauth @protected {
+    chromium \$HASH
+  }
+  root * \$1/novnc
+  file_server
+  handle_path /websockify* {
+    reverse_proxy localhost:5902
+  }
+}
+EOF
+  echo "✅ Caddyfile 已生成，端口 \$CM_PORT，用户名 chromium"
+}
+
+enable_autoconnect() {
+  local file="\${1:-index.html}"
+  if command -v perl >/dev/null 2>&1; then
+    perl -i -pe 's/.*defaults\["autoconnect"\].*\n//g if \$. != 85;
+                 \$_ = "defaults[\"autoconnect\"] = true;\n" if \$. == 85;' "\$file" 2>/dev/null || true
+  fi
+}
+
+start_services() {
+  echo "🚀 启动 Chromium + TigerVNC + Openbox..."
+
+  if ! command -v chromium-browser >/dev/null 2>&1; then
+    apk update
+    apk add --no-cache chromium git python3 py3-pip bash ttf-dejavu websockify curl \
+      font-noto-emoji font-noto-cjk
+    apk add --no-cache mesa mesa-gl mesa-egl libx11 libxext libxrender \
+      tigervnc openbox xdpyinfo pciutils-dev st xdotool
+    fc-cache -fv
+  else
+    echo "✅ 软件包已存在，跳过安装"
+  fi
+
+  [ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
+  curl -LSs https://gbjs.serv00.net/tar/cm_menu.xml -o ~/.config/openbox/menu.xml
+
+  # 启动 TigerVNC（降低分辨率色深提升流畅度）
+  export SERVICECMD="Xvnc :1 -geometry \${VNC_RESOLUTION} -depth \${VNC_DEPTH} -SecurityTypes None"
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
+
+  export DISPLAY=:1
+  for i in \$(seq 1 15); do
+    if xdpyinfo > /dev/null 2>&1; then
+      echo "✅ Xvnc 已就绪，启动 Openbox..."
+      break
+    fi
+    echo "⏳ 等待 Xvnc 初始化... (\${i}/15)"
+    sleep 1
+  done
+
+  export SERVICECMD="openbox"
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+  sed -i "1a export DISPLAY=:1" /etc/service/openbox/run
+
+  # 启动 Chromium（针对无GPU容器优化）
+  export SERVICECMD="chromium-browser \
+    --no-sandbox \
+    --start-maximized \
+    --window-size=\${VNC_W},\${VNC_H} \
+    --disable-dev-shm-usage \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-extensions \
+    --disable-background-networking \
+    --js-flags=--max-old-space-size=512"
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+  mkdir -p "\$PWD/.cache"
+  sed -i "1a export TMPDIR=\$PWD/.cache" /etc/service/chromium-browser/run
+  sed -i "1a export DISPLAY=:1" /etc/service/chromium-browser/run
+
+  basedir=\$(pwd)
+
+  if [ ! -d "./novnc" ]; then
+    echo "下载 noVNC..."
+    if timeout 10s git clone --depth=1 https://github.com/novnc/noVNC.git ./novnc 2>/dev/null; then
+      echo "✅ noVNC 克隆成功"
+    else
+      echo "⚠️ GitHub 超时，使用备用源..."
+      wget -O noVNC.tar.gz https://gbjs.serv00.net/tar/noVNC-1.6.0.tar.gz
+      mkdir -p novnc
+      tar -xzf noVNC.tar.gz -C ./novnc --strip-components=1
+      rm noVNC.tar.gz
+    fi
+  else
+    echo "✅ noVNC 已存在，跳过下载"
+  fi
+
+  cd novnc || { echo "❌ 无法进入 novnc 目录"; exit 1; }
+  if [ -f "vnc.html" ] && [ ! -f "index.html" ]; then
+    mv vnc.html index.html
+    enable_autoconnect
+  fi
+  wwwdir=\$(pwd)
+
+  if [ -z "\$CM_PASS" ]; then
+    export SERVICECMD="websockify --web \${wwwdir} \${CM_PORT} localhost:5901"
+    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
+    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:\${CM_PORT}/index.html"
+  else
+    export SERVICECMD="websockify 5902 localhost:5901"
+    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+    apk add --no-cache caddy
+    generate_caddy_config \$basedir
+    export SERVICECMD="caddy run --config \${basedir}/Caddyfile"
+    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
+    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:\${CM_PORT}/index.html"
+  fi
+}
+
+stop_services() {
+  echo "🛑 停止所有服务..."
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s stop
+  rm -rf /etc/service
+  echo "✅ 所有进程已清理"
+}
+
+runit_status() {
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s list
+}
+
+case "\$MODE" in
+  start)   start_services ;;
+  stop)    stop_services ;;
+  restart) stop_services; sleep 1; start_services ;;
+  status)  runit_status ;;
+  *) echo "用法: \$0 {start|stop|restart|status}"; exit 1 ;;
+esac
+INNEREOF
+
 	chmod +x "$INNER_SCRIPT_PATH"
 
 	PROOT_STARTED=1 nohup ./proot -S ./rootfs -b /proc -b /sys -w "$PROOT_DIR" --cwd=/root \
@@ -301,16 +304,12 @@ run_remote() {
 		export PATH=/sbin:/bin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 		export HOME='/config'
 		export TMPDIR='\$HOME/tmp'
-		export CM_PORT='${CM_PORT:-9020}'
-		export CM_PASS='${CM_PASS:-}'
-		export VNC_RESOLUTION='${VNC_RESOLUTION:-1280x720}'
-		export VNC_DEPTH='${VNC_DEPTH:-16}'
 		echo 'export HOME=\"/config\"' > /root/.bashrc
 		echo 'export TMPDIR=\"/config/tmp\"' >> /root/.bashrc
 		[ -d \$TMPDIR ] || mkdir -p \$TMPDIR
 		[ -d \$HOME ]   || mkdir -p \$HOME
 		command -v curl >/dev/null 2>&1 || apk add --no-cache curl bash
-		sh /tmp/runchrome_runit.sh \"$1\" 2>&1
+		sh /root/runchrome_runit.sh \"$1\" 2>&1
 		" > /tmp/cm_pipe 2>&1 &
 
 	{
