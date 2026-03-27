@@ -25,15 +25,8 @@ echo_env_vars() {
 	export ARGO_AUTH="${ARGO_AUTH:-''}"
 	export CM_PASS="${CM_PASS:-Ww112211}"
 	export CM_PORT="${CM_PORT:-9020}"
-
-	# ✅ 新增变量
-	export VNC_RES="${VNC_RES:-720x1280}"
-	export VNC_DEPTH="${VNC_DEPTH:-24}"
-
 	[ -n "$ARGO_AUTH" ] && echo "  ARGO_AUTH=$ARGO_AUTH"
 	[ -n "$CM_PORT" ]   && echo "  CM_PORT=$CM_PORT"
-	echo "  VNC_RES=$VNC_RES"
-	echo "  VNC_DEPTH=$VNC_DEPTH"
 }
 
 # ============================================================
@@ -125,14 +118,6 @@ run_remote() {
 		setgamehostproot
 	fi
 
-	# ✅ 新增解析
-	VNC_RES="${VNC_RES:-720x1280}"
-	VNC_DEPTH="${VNC_DEPTH:-16}"
-	_VNC_W="${VNC_RES%x*}"
-	_VNC_H="${VNC_RES#*x}"
-	_VNC_RES="${_VNC_W}x${_VNC_H}"
-	_VNC_DEPTH="${VNC_DEPTH}"
-
 	if [ "$1" = "start" ]; then
 		run_gost_proxy start
 	else
@@ -142,56 +127,66 @@ run_remote() {
 	runcftunnel "$1"
 	cd "${PROOT_DIR}"
 
+	# ==================== ✅ 新增环境变量支持 ====================
+	VNC_RES="${VNC_RES:-720x1280}"
+	VNC_DEPTH="${VNC_DEPTH:-16}"
+
+	_VNC_W="${VNC_RES%x*}"
+	_VNC_H="${VNC_RES#*x}"
+	_VNC_RES="${_VNC_W}x${_VNC_H}"
+	_VNC_DEPTH="${VNC_DEPTH}"
+	# =============================================================
+
 	_CM_PORT="${CM_PORT:-9020}"
 	_CM_PASS="${CM_PASS:-}"
 
 	INNER_SCRIPT_PATH="${PROOT_DIR}/rootfs/root/runchrome_runit.sh"
 
-	cat > "$INNER_SCRIPT_PATH" <<INNEREOF
+	cat > "$INNER_SCRIPT_PATH" <<'INNEREOF'
 #!/bin/sh
 set -eu
 
-MODE="\$1"
-CM_PORT="\${CM_PORT:-9020}"
-CM_PASS="\${CM_PASS:-Ww112211}"
+MODE="$1"
+CM_PORT="${CM_PORT:-9020}"
+CM_PASS="${CM_PASS:-Ww112211}"
 
-# ✅ 使用外部传入
-VNC_W=${_VNC_W}
-VNC_H=${_VNC_H}
-VNC_RES="${_VNC_RES}"
-VNC_DEPTH=${_VNC_DEPTH}
+# ==================== ✅ 新增读取环境变量 ====================
+VNC_RES="${VNC_RES:-720x1280}"
+VNC_DEPTH="${VNC_DEPTH:-24}"
+VNC_W="${VNC_RES%x*}"
+VNC_H="${VNC_RES#*x}"
+# =============================================================
 
 export DISPLAY=:1
 export GDK_SCALE=1
-export GDK_DPI_SCALE=1
 
 generate_caddy_config() {
-  [ -z "\$CM_PASS" ] && echo "CM_PASS not set" && return 1
-  HASH=\$(caddy hash-password --plaintext "\$CM_PASS")
-  [ -z "\$HASH" ] && echo "hash failed" && return 1
-  rm -rf \$1/Caddyfile
-  cat > \$1/Caddyfile << EOF
-:\$CM_PORT {
+  [ -z "$CM_PASS" ] && echo "CM_PASS not set" && return 1
+  HASH=$(caddy hash-password --plaintext "$CM_PASS")
+  [ -z "$HASH" ] && echo "hash failed" && return 1
+  rm -rf $1/Caddyfile
+  cat > $1/Caddyfile << EOF
+:$CM_PORT {
   @protected {
     not path /websockify*
   }
   basicauth @protected {
-    admin \$HASH
+    admin $HASH
   }
-  root * \$1/novnc
+  root * $1/novnc
   file_server
   handle_path /websockify* {
     reverse_proxy localhost:5902
   }
 }
 EOF
-  echo "✅ Caddyfile 已生成，端口 \$CM_PORT，用户名 admin"
+  echo "✅ Caddyfile 已生成，端口 $CM_PORT，用户名 admin"
 }
 
 enable_autoconnect() {
-  local file="\${1:-index.html}"
+  local file="${1:-index.html}"
   if command -v perl >/dev/null 2>&1; then
-    perl -i -pe 's/.*defaults\["autoconnect"\].*//g; \$_ = "defaults[\"autoconnect\"] = true;\n" if \$. == 85;' "\$file" 2>/dev/null || true
+    perl -i -pe 's/.*defaults\["autoconnect"\].*//g; $_ = "defaults[\"autoconnect\"] = true;\n" if $. == 85;' "$file" 2>/dev/null || true
   fi
 }
 
@@ -210,34 +205,133 @@ start_services() {
     echo "✅ 软件包已存在，跳过安装"
   fi
 
-  export SERVICECMD="Xvnc :1 -geometry \${VNC_RES} -depth \${VNC_DEPTH} -SecurityTypes None"
+  [ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
+  curl -LSs https://gbjs.serv00.net/tar/cm_menu.xml -o ~/.config/openbox/menu.xml 2>/dev/null || true
+
+  export SERVICECMD="Xvnc :1 -geometry ${VNC_RES} -depth ${VNC_DEPTH} -SecurityTypes None"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
+
+  for i in $(seq 1 15); do
+    if xdpyinfo -display :1 > /dev/null 2>&1; then
+      echo "✅ Xvnc 已就绪，启动 Openbox..."
+      break
+    fi
+    echo "⏳ 等待 Xvnc 初始化... (${i}/15)"
+    sleep 1
+  done
 
   export SERVICECMD="openbox"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+  sed -i "1a export DISPLAY=:1" /etc/service/openbox/run
 
   export SERVICECMD="chromium-browser \
     --no-sandbox \
-    --window-size=\${VNC_W},\${VNC_H}"
+    --window-size=${VNC_W},${VNC_H} \
+    --disable-dev-shm-usage \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-background-networking \
+    --js-flags=--max-old-space-size=1024"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+  mkdir -p "$PWD/.cache"
+  sed -i "1a export TMPDIR=$PWD/.cache" /etc/service/chromium-browser/run
+  sed -i "1a export DISPLAY=:1" /etc/service/chromium-browser/run
 
-  export SERVICECMD="websockify --web ./novnc \${CM_PORT} localhost:5901"
-  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+  basedir=$(pwd)
+  if [ ! -d "./novnc" ]; then
+    echo "📦 下载 noVNC..."
+    if timeout 10s git clone --depth=1 https://github.com/novnc/noVNC.git ./novnc 2>/dev/null; then
+      echo "✅ noVNC 克隆成功"
+    else
+      wget -O noVNC.tar.gz https://gbjs.serv00.net/tar/noVNC-1.6.0.tar.gz
+      mkdir -p novnc
+      tar -xzf noVNC.tar.gz -C ./novnc --strip-components=1
+      rm noVNC.tar.gz
+    fi
+  else
+    echo "✅ noVNC 已存在，跳过下载"
+  fi
+
+  cd novnc || { echo "❌ 无法进入 novnc 目录"; exit 1; }
+  if [ -f "vnc.html" ] && [ ! -f "index.html" ]; then
+    mv vnc.html index.html
+    enable_autoconnect index.html
+    sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize","off");/' index.html || true
+  fi
+  wwwdir=$(pwd)
+
+  if [ -z "$CM_PASS" ]; then
+    export SERVICECMD="websockify --web ${wwwdir} ${CM_PORT} localhost:5901"
+    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:${CM_PORT}/index.html"
+  else
+    export SERVICECMD="websockify 5902 localhost:5901"
+    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+    apk add --no-cache caddy
+    generate_caddy_config $basedir
+    export SERVICECMD="caddy run --config ${basedir}/Caddyfile"
+    (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:${CM_PORT}/index.html"
+  fi
 }
 
-case "\$MODE" in
-  start) start_services ;;
-  stop) ;;
+stop_services() {
+  echo "🛑 停止所有服务..."
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s stop
+  rm -rf /etc/service
+  echo "✅ 所有进程已清理"
+}
+
+runit_status() {
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s list
+}
+
+case "$MODE" in
+  start)   start_services ;;
+  stop)    stop_services ;;
+  restart) stop_services; sleep 1; start_services ;;
+  status)  runit_status ;;
+  *) echo "用法: $0 {start|stop|restart|status}"; exit 1 ;;
 esac
 INNEREOF
 
 	chmod +x "$INNER_SCRIPT_PATH"
 
+	[ -e /tmp/cm_pipe ] && rm -f /tmp/cm_pipe
+	mkfifo /tmp/cm_pipe
+
 	PROOT_STARTED=1 nohup ./proot -S ./rootfs -b /proc -b /sys -w "$PROOT_DIR" --cwd=/root \
 		-b /etc/resolv.conf:/etc/resolv.conf \
 		-b "$PROOT_TMP_DIR/hosts":/etc/hosts /bin/sh -c "
-		sh /root/runchrome_runit.sh \"$1\"
-		" &
+		export PATH=/sbin:/bin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+		export HOME='/config'
+		export TMPDIR='\$HOME/tmp'
+		echo 'export HOME=\"/config\"' > /root/.bashrc
+		echo 'export TMPDIR=\"/config/tmp\"' >> /root/.bashrc
+		[ -d \$TMPDIR ] || mkdir -p \$TMPDIR
+		[ -d \$HOME ]   || mkdir -p \$HOME
+		command -v curl >/dev/null 2>&1 || apk add --no-cache curl bash
+		sh /root/runchrome_runit.sh \"$1\" 2>&1
+		echo '__CHROME_DONE__'
+		" > /tmp/cm_pipe 2>&1 &
+
+	echo "🔧 [Chrome] 正在初始化，等待服务就绪..."
+	while IFS= read -r line; do
+		echo "$line"
+		echo "$line" >> /home/container/.tmp/alpine/cm.log 2>/dev/null || true
+		[ "$line" = "__CHROME_DONE__" ] && break
+	done < /tmp/cm_pipe
+
+	rm -f /tmp/cm_pipe
+
+	if [ "$1" = "start" ]; then
+		echo "✅ Chrome 后台服务已就绪！"
+		if [ -n "$PROXY_IP" ] && [ -n "$PROXY_PORT" ]; then
+			local GOST_PORT="${PROXY_LOCAL_PORT:-1080}"
+			echo "🛡  SOCKS5 代理: 127.0.0.1:${GOST_PORT}（无需密码）"
+		fi
+		echo "🌐 noVNC 访问端口: ${_CM_PORT}"
+	fi
 }
 
 case "$1" in
@@ -257,9 +351,9 @@ case "$1" in
 		;;
 	*)
 		echo "用法: $0 {start|stop|restart|status}"
-		echo "支持变量:"
-		echo "  VNC_RES=900x1600"
-		echo "  VNC_DEPTH=24"
+		echo "可选环境变量:"
+		echo "  代理: PROXY_IP  PROXY_PORT  PROXY_USER  PROXY_PASS  PROXY_LOCAL_PORT(默认1080)"
+		echo "  显示: VNC_RESOLUTION(默认720x1280)  VNC_DEPTH(默认24)"
 		exit 1
 		;;
 esac
