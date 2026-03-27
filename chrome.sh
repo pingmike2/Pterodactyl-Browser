@@ -25,8 +25,12 @@ echo_env_vars() {
 	export ARGO_AUTH="${ARGO_AUTH:-''}"
 	export CM_PASS="${CM_PASS:-Ww112211}"
 	export CM_PORT="${CM_PORT:-9020}"
+	VNC_RES="${VNC_RES:-720x1280}"
+	VNC_DEPTH="${VNC_DEPTH:-16}"
 	[ -n "$ARGO_AUTH" ] && echo "  ARGO_AUTH=$ARGO_AUTH"
 	[ -n "$CM_PORT" ]   && echo "  CM_PORT=$CM_PORT"
+	[ -n "$VNC_RES" ]   && echo "  VNC_RES=$VNC_RES"
+	[ -n "$VNC_DEPTH" ] && echo "  VNC_DEPTH=$VNC_DEPTH"
 }
 
 # ============================================================
