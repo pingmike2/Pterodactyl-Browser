@@ -1,5 +1,5 @@
 #!/bin/bash
-# 部署 Chrome（TigerVNC + Gost SOCKS5 代理中转）
+# 部署 Chrome（TigerVNC + Gost SOCKS5 代理中转）竖屏版
 
 # ============================================================
 # 环境变量加载
@@ -127,56 +127,59 @@ run_remote() {
 	runcftunnel "$1"
 	cd "${PROOT_DIR}"
 
-	# 解析分辨率（用 cut 兼容 busybox sh，避免 Bad substitution）
-	_VNC_RES="${VNC_RESOLUTION:-900x1400}"
-	_VNC_W=$(echo "$_VNC_RES" | cut -d'x' -f1)
-	_VNC_H=$(echo "$_VNC_RES" | cut -d'x' -f2)
-	_VNC_DEPTH="${VNC_DEPTH:-16}"
+	# VNC 分辨率设置（竖屏）
+	_VNC_W=720
+	_VNC_H=1280
+	_VNC_RES="${_VNC_W}x${_VNC_H}"
+	_VNC_DEPTH=16
 	_CM_PORT="${CM_PORT:-9020}"
 	_CM_PASS="${CM_PASS:-}"
 
-	# 写入内嵌脚本到 proot /root/
 	INNER_SCRIPT_PATH="${PROOT_DIR}/rootfs/root/runchrome_runit.sh"
 
-	cat > "$INNER_SCRIPT_PATH" << INNEREOF
+	cat > "$INNER_SCRIPT_PATH" <<'INNEREOF'
 #!/bin/sh
 set -eu
 
-MODE="\$1"
-CM_PORT="${_CM_PORT}"
-CM_PASS="${_CM_PASS}"
-VNC_W="${_VNC_W}"
-VNC_H="${_VNC_H}"
-VNC_DEPTH="${_VNC_DEPTH}"
-VNC_RESOLUTION="\${VNC_W}x\${VNC_H}"
+MODE="$1"
+CM_PORT="${CM_PORT:-9020}"
+CM_PASS="${CM_PASS:-Ww112211}"
+VNC_W=720
+VNC_H=1280
+VNC_RES="${VNC_W}x${VNC_H}"
+VNC_DEPTH=16
+
+export DISPLAY=:1
+export GDK_SCALE=1
+export GDK_DPI_SCALE=1
 
 generate_caddy_config() {
-  [ -z "\$CM_PASS" ] && echo "CM_PASS not set" && return 1
-  HASH=\$(caddy hash-password --plaintext "\$CM_PASS")
-  [ -z "\$HASH" ] && echo "hash failed" && return 1
-  rm -rf \$1/Caddyfile
-  cat > \$1/Caddyfile << EOF
-:\$CM_PORT {
+  [ -z "$CM_PASS" ] && echo "CM_PASS not set" && return 1
+  HASH=$(caddy hash-password --plaintext "$CM_PASS")
+  [ -z "$HASH" ] && echo "hash failed" && return 1
+  rm -rf $1/Caddyfile
+  cat > $1/Caddyfile << EOF
+:$CM_PORT {
   @protected {
     not path /websockify*
   }
   basicauth @protected {
-    chromium \$HASH
+    chromium $HASH
   }
-  root * \$1/novnc
+  root * $1/novnc
   file_server
   handle_path /websockify* {
     reverse_proxy localhost:5902
   }
 }
 EOF
-  echo "✅ Caddyfile 已生成，端口 \$CM_PORT，用户名 chromium"
+  echo "✅ Caddyfile 已生成，端口 $CM_PORT，用户名 chromium"
 }
 
 enable_autoconnect() {
-  local file="\${1:-index.html}"
+  local file="${1:-index.html}"
   if command -v perl >/dev/null 2>&1; then
-    perl -i -pe 's/.*defaults\["autoconnect"\].*//g; \$_ = "defaults[\"autoconnect\"] = true;\n" if \$. == 85;' "\$file" 2>/dev/null || true
+    perl -i -pe 's/.*defaults\["autoconnect"\].*//g; $_ = "defaults[\"autoconnect\"] = true;\n" if $. == 85;' "$file" 2>/dev/null || true
   fi
 }
 
@@ -198,51 +201,41 @@ start_services() {
   [ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
   curl -LSs https://gbjs.serv00.net/tar/cm_menu.xml -o ~/.config/openbox/menu.xml 2>/dev/null || true
 
-  # 启动 TigerVNC（降低分辨率和色深提升流畅度）
-  export SERVICECMD="Xvnc :1 -geometry \${VNC_RESOLUTION} -depth \${VNC_DEPTH} -SecurityTypes None"
+  export SERVICECMD="Xvnc :1 -geometry ${VNC_RES} -depth ${VNC_DEPTH} -SecurityTypes None"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
 
-  export DISPLAY=:1
-		export GDK_SCALE=1
-		export GDK_DPI_SCALE=0.6
-  for i in \$(seq 1 15); do
+  for i in $(seq 1 15); do
     if xdpyinfo -display :1 > /dev/null 2>&1; then
       echo "✅ Xvnc 已就绪，启动 Openbox..."
       break
     fi
-    echo "⏳ 等待 Xvnc 初始化... (\${i}/15)"
+    echo "⏳ 等待 Xvnc 初始化... (${i}/15)"
     sleep 1
   done
 
-  # 启动 Openbox
   export SERVICECMD="openbox"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
   sed -i "1a export DISPLAY=:1" /etc/service/openbox/run
 
-  # 启动 Chromium（无 GPU 容器优化参数）
   export SERVICECMD="chromium-browser \
     --no-sandbox \
-    --start-maximized \
-    --window-size=\${VNC_W},\${VNC_H} \
+    --window-size=${VNC_W},${VNC_H} \
     --disable-dev-shm-usage \
     --disable-gpu \
     --disable-software-rasterizer \
     --disable-background-networking \
     --js-flags=--max-old-space-size=1024"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
-  mkdir -p "\$PWD/.cache"
-  sed -i "1a export TMPDIR=\$PWD/.cache" /etc/service/chromium-browser/run
+  mkdir -p "$PWD/.cache"
+  sed -i "1a export TMPDIR=$PWD/.cache" /etc/service/chromium-browser/run
   sed -i "1a export DISPLAY=:1" /etc/service/chromium-browser/run
 
-  basedir=\$(pwd)
-
-  # 下载 noVNC（已存在则跳过）
+  basedir=$(pwd)
   if [ ! -d "./novnc" ]; then
     echo "📦 下载 noVNC..."
     if timeout 10s git clone --depth=1 https://github.com/novnc/noVNC.git ./novnc 2>/dev/null; then
       echo "✅ noVNC 克隆成功"
     else
-      echo "⚠️ GitHub 超时，使用备用源..."
       wget -O noVNC.tar.gz https://gbjs.serv00.net/tar/noVNC-1.6.0.tar.gz
       mkdir -p novnc
       tar -xzf noVNC.tar.gz -C ./novnc --strip-components=1
@@ -256,21 +249,22 @@ start_services() {
   if [ -f "vnc.html" ] && [ ! -f "index.html" ]; then
     mv vnc.html index.html
     enable_autoconnect index.html
+    sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize","scale");/' index.html || true
   fi
-  wwwdir=\$(pwd)
+  wwwdir=$(pwd)
 
-  if [ -z "\$CM_PASS" ]; then
-    export SERVICECMD="websockify --web \${wwwdir} \${CM_PORT} localhost:5901"
+  if [ -z "$CM_PASS" ]; then
+    export SERVICECMD="websockify --web ${wwwdir} ${CM_PORT} localhost:5901"
     (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
-    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:\${CM_PORT}/index.html"
+    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:${CM_PORT}/index.html"
   else
     export SERVICECMD="websockify 5902 localhost:5901"
     (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
     apk add --no-cache caddy
-    generate_caddy_config \$basedir
-    export SERVICECMD="caddy run --config \${basedir}/Caddyfile"
+    generate_caddy_config $basedir
+    export SERVICECMD="caddy run --config ${basedir}/Caddyfile"
     (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
-    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:\${CM_PORT}/index.html"
+    echo "✅ noVNC 已就绪，访问: http://0.0.0.0:${CM_PORT}/index.html"
   fi
 }
 
@@ -285,12 +279,12 @@ runit_status() {
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s list
 }
 
-case "\$MODE" in
+case "$MODE" in
   start)   start_services ;;
   stop)    stop_services ;;
   restart) stop_services; sleep 1; start_services ;;
   status)  runit_status ;;
-  *) echo "用法: \$0 {start|stop|restart|status}"; exit 1 ;;
+  *) echo "用法: $0 {start|stop|restart|status}"; exit 1 ;;
 esac
 INNEREOF
 
@@ -299,7 +293,6 @@ INNEREOF
 	[ -e /tmp/cm_pipe ] && rm -f /tmp/cm_pipe
 	mkfifo /tmp/cm_pipe
 
-	# 后台启动 proot，完成后输出 __CHROME_DONE__ 信号
 	PROOT_STARTED=1 nohup ./proot -S ./rootfs -b /proc -b /sys -w "$PROOT_DIR" --cwd=/root \
 		-b /etc/resolv.conf:/etc/resolv.conf \
 		-b "$PROOT_TMP_DIR/hosts":/etc/hosts /bin/sh -c "
@@ -315,7 +308,6 @@ INNEREOF
 		echo '__CHROME_DONE__'
 		" > /tmp/cm_pipe 2>&1 &
 
-	# 读取输出直到收到完成信号，然后立即返回让 nanolimbo 继续
 	echo "🔧 [Chrome] 正在初始化，等待服务就绪..."
 	while IFS= read -r line; do
 		echo "$line"
@@ -354,7 +346,7 @@ case "$1" in
 		echo "用法: $0 {start|stop|restart|status}"
 		echo "可选环境变量:"
 		echo "  代理: PROXY_IP  PROXY_PORT  PROXY_USER  PROXY_PASS  PROXY_LOCAL_PORT(默认1080)"
-		echo "  显示: VNC_RESOLUTION(默认1280x720)  VNC_DEPTH(默认16)"
+		echo "  显示: VNC_RESOLUTION(默认720x1280)  VNC_DEPTH(默认16)"
 		exit 1
 		;;
 esac
