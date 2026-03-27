@@ -222,7 +222,10 @@ start_services() {
   # 启动 Openbox
   export SERVICECMD="openbox"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
-  sed -i "1a export DISPLAY=:1 export GDK_SCALE=1 export GDK_DPI_SCALE=0.6" /etc/service/openbox/run
+		sleep 2
+  sed -i "1a export DISPLAY=:1" /etc/service/openbox/run
+		sed -i '2i export GDK_SCALE=1' /etc/service/openbox/run
+		sed -i '3i export GDK_DPI_SCALE=0.6' /etc/service/openbox/run
 
   # 启动 Chromium（无 GPU 容器优化参数）
   export SERVICECMD="chromium-browser \
