@@ -132,78 +132,47 @@ sed -i 's/UI.initSetting("autoconnect".*/UI.initSetting("autoconnect",true);/' \
 
 start_services() {
 
-echo "🚀 启动 Chromium + TigerVNC + Openbox..."
+  echo "🚀 启动 Chromium + TigerVNC + Openbox..."
 
-apk update
+  if ! command -v chromium-browser >/dev/null 2>&1; then
+    apk update
+    apk add --no-cache chromium git bash curl wget \
+      tigervnc openbox websockify \
+      font-noto-emoji font-noto-cjk ttf-dejavu
+  fi
 
-apk add --no-cache \
-chromium \
-tigervnc \
-openbox \
-websockify \
-git curl wget \
-font-noto-cjk font-noto-emoji \
-mesa mesa-gl mesa-egl \
-caddy
+  export DISPLAY=:1
 
-pkill -9 Xvnc 2>/dev/null || true
-rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null
+  # Xvnc
+  export SERVICECMD="Xvnc :1 -geometry ${VNC_RESOLUTION} -depth ${VNC_DEPTH} -SecurityTypes None"
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
 
-export SERVICECMD="Xvnc :1 -geometry \${VNC_RESOLUTION} -depth \${VNC_DEPTH} -SecurityTypes None"
+  # openbox
+  export SERVICECMD="openbox"
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
+  sed -i '1a export DISPLAY=:1' /etc/service/openbox/run
 
-curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s start
+  # chromium
+  export SERVICECMD="chromium-browser \
+    --no-sandbox \
+    --window-size=${VNC_W},${VNC_H} \
+    --force-device-scale-factor=1 \
+    --high-dpi-support=1 \
+    --disable-dev-shm-usage \
+    --disable-gpu \
+    --disable-background-networking"
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
 
-export DISPLAY=:1
-sleep 2
+  sed -i '1a export DISPLAY=:1' /etc/service/chromium-browser/run
 
-export SERVICECMD="openbox"
-curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
-sed -i "1a export DISPLAY=:1" /etc/service/openbox/run
+  # websockify
+  export SERVICECMD="websockify 5902 localhost:5901"
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
 
-export SERVICECMD="chromium-browser \
---no-sandbox \
---window-size=\${VNC_W},\${VNC_H} \
---force-device-scale-factor=1 \
---high-dpi-support=1 \
---user-agent='Mozilla/5.0 (Linux; Android 13; Mobile)' \
---disable-dev-shm-usage \
---disable-gpu \
---disable-background-networking"
+  # 最后再启动 runsvdir
+  (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s start
 
-curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
-sed -i "1a export DISPLAY=:1" /etc/service/chromium-browser/run
-
-cd /root
-
-[ ! -d novnc ] && git clone --depth=1 https://github.com/novnc/noVNC.git
-
-cd novnc
-
-[ -f vnc.html ] && mv vnc.html index.html
-
-enable_mobile_ui index.html
-
-if [ -z "\$CM_PASS" ]; then
-
-export SERVICECMD="websockify --web . \${CM_PORT} localhost:5901"
-curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
-
-else
-
-export SERVICECMD="websockify 5902 localhost:5901"
-curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
-
-cd /root
-
-generate_caddy_config
-
-export SERVICECMD="caddy run --config /root/Caddyfile"
-curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
-
-fi
-
-echo "🌐 http://0.0.0.0:\${CM_PORT}"
-
+  echo "✅ 服务启动完成"
 }
 
 stop_services() {
