@@ -147,7 +147,7 @@ CM_PASS="${CM_PASS:-Ww112211}"
 VNC_W=720
 VNC_H=1280
 VNC_RES="${VNC_W}x${VNC_H}"
-VNC_DEPTH=16
+VNC_DEPTH=24
 
 export DISPLAY=:1
 export GDK_SCALE=1
@@ -249,7 +249,7 @@ start_services() {
   if [ -f "vnc.html" ] && [ ! -f "index.html" ]; then
     mv vnc.html index.html
     enable_autoconnect index.html
-    sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize","scale");/' index.html || true
+    sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize","off");/' index.html || true
   fi
   wwwdir=$(pwd)
 
@@ -346,7 +346,7 @@ case "$1" in
 		echo "用法: $0 {start|stop|restart|status}"
 		echo "可选环境变量:"
 		echo "  代理: PROXY_IP  PROXY_PORT  PROXY_USER  PROXY_PASS  PROXY_LOCAL_PORT(默认1080)"
-		echo "  显示: VNC_RESOLUTION(默认720x1280)  VNC_DEPTH(默认16)"
+		echo "  显示: VNC_RESOLUTION(默认720x1280)  VNC_DEPTH(默认24)"
 		exit 1
 		;;
 esac
