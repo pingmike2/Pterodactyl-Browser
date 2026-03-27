@@ -1,147 +1,172 @@
 #!/bin/bash
-# 部署 Chrome（TigerVNC + Gost SOCKS5 代理中转 + Caddy）
+# Chrome + TigerVNC + noVNC + Caddy + Gost + Cloudflare Tunnel
 
 # ============================================================
-# 环境变量加载
+# 读取 env
 # ============================================================
+
 load_env() {
-	shopt -s dotglob
-	for f in ./.env ./*.env ./*/*.env ./*/*/*.env; do
-		[ -f "$f" ] && ENV_FILE="$f" && break
-	done
-	shopt -u dotglob
-	if [ -n "$ENV_FILE" ]; then
-		echo "Loading environment variables from: $ENV_FILE"
-		while IFS='=' read -r key value || [ -n "$key" ]; do
-			case "$key" in ''|\#*) continue ;; esac
-			export "$key=$value"
-		done < "$ENV_FILE"
-	else
-		echo "No .env file found"
-	fi
-}
 
-echo_env_vars() {
-	export ARGO_AUTH="${ARGO_AUTH:-''}"
-	export CM_PASS="${CM_PASS:-Ww112211}"
-	export CM_PORT="${CM_PORT:-9020}"
-	[ -n "$ARGO_AUTH" ] && echo "  ARGO_AUTH=$ARGO_AUTH"
-	[ -n "$CM_PORT" ]   && echo "  CM_PORT=$CM_PORT"
+shopt -s dotglob
+
+for f in ./.env ./*.env ./*/*.env ./*/*/*.env
+do
+[ -f "$f" ] && ENV_FILE="$f" && break
+done
+
+shopt -u dotglob
+
+if [ -n "$ENV_FILE" ]; then
+
+echo "Loading env: $ENV_FILE"
+
+while IFS='=' read -r key value || [ -n "$key" ]
+do
+
+case "$key" in
+''|\#*) continue ;;
+esac
+
+export "$key=$value"
+
+done < "$ENV_FILE"
+
+fi
+
 }
 
 # ============================================================
-# proot 环境初始化
+# proot
 # ============================================================
+
 setgamehostproot() {
-	mkdir -p /home/container/.tmp
-	cd /home/container/.tmp
-	source <(curl -LsS https://gbjs.serv00.net/sh/alpineproot322.sh)
+
+mkdir -p /home/container/.tmp
+cd /home/container/.tmp
+
+source <(curl -LsS https://gbjs.serv00.net/sh/alpineproot322.sh)
+
 }
 
 # ============================================================
-# Gost SOCKS5 代理中转
+# Gost
 # ============================================================
+
 run_gost_proxy() {
 
-	local action="$1"
+action="$1"
 
-	if [ "$action" = "stop" ]; then
-		[ -f /tmp/gost.pid ] && kill "$(cat /tmp/gost.pid)" 2>/dev/null
-		rm -f /tmp/gost.pid
-		echo "✅ Gost 已停止"
-		return
-	fi
+if [ "$action" = "stop" ]; then
 
-	if [ -z "$PROXY_IP" ] || [ -z "$PROXY_PORT" ] || \
-	   [ -z "$PROXY_USER" ] || [ -z "$PROXY_PASS" ]; then
-		echo "=> 未配置代理，跳过"
-		return
-	fi
+[ -f /tmp/gost.pid ] && kill "$(cat /tmp/gost.pid)" 2>/dev/null
+rm -f /tmp/gost.pid
+return
 
-	local GOST_BIN=/tmp/gost
-	local GOST_PORT="${PROXY_LOCAL_PORT:-1080}"
+fi
 
-	if [ ! -x "$GOST_BIN" ]; then
-		echo "下载 Gost..."
-		ARCH=$(uname -m)
 
-		case "$ARCH" in
-			x86_64)
-				URL="https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz"
-			;;
-			aarch64)
-				URL="https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-armv8-2.11.5.gz"
-			;;
-			*)
-				echo "不支持架构 $ARCH"
-				return
-			;;
-		esac
+if [ -z "$PROXY_IP" ] || [ -z "$PROXY_PORT" ] || \
+   [ -z "$PROXY_USER" ] || [ -z "$PROXY_PASS" ]; then
 
-		curl -Ls "$URL" | gunzip > "$GOST_BIN"
-		chmod +x "$GOST_BIN"
-	fi
+echo "=> 未配置代理，跳过"
+return
 
-	[ -f /tmp/gost.pid ] && kill "$(cat /tmp/gost.pid)" 2>/dev/null
+fi
 
-	nohup "$GOST_BIN" \
-	-L "socks5://:${GOST_PORT}" \
-	-F "socks5://${PROXY_USER}:${PROXY_PASS}@${PROXY_IP}:${PROXY_PORT}" \
-	>/tmp/gost.log 2>&1 &
+GOST_BIN=/tmp/gost
+GOST_PORT="${PROXY_LOCAL_PORT:-1080}"
 
-	echo $! > /tmp/gost.pid
+if [ ! -x "$GOST_BIN" ]; then
 
-	echo "✅ SOCKS5: 127.0.0.1:${GOST_PORT}"
+ARCH=$(uname -m)
+
+case "$ARCH" in
+
+x86_64)
+URL="https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz"
+;;
+
+aarch64)
+URL="https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-armv8-2.11.5.gz"
+;;
+
+*)
+echo "架构不支持"
+return
+;;
+
+esac
+
+curl -Ls "$URL" | gunzip > "$GOST_BIN"
+chmod +x "$GOST_BIN"
+
+fi
+
+nohup "$GOST_BIN" \
+-L "socks5://:${GOST_PORT}" \
+-F "socks5://${PROXY_USER}:${PROXY_PASS}@${PROXY_IP}:${PROXY_PORT}" \
+>/tmp/gost.log 2>&1 &
+
+echo $! > /tmp/gost.pid
+
+echo "SOCKS5: 127.0.0.1:${GOST_PORT}"
+
 }
 
 # ============================================================
 # Cloudflare Tunnel
 # ============================================================
+
 runcftunnel() {
 
-	[[ "$1" != "start" ]] && return
+[[ "$1" != "start" ]] && return
 
-	[ -z "${ARGO_AUTH}" ] && load_env
+[ -z "$ARGO_AUTH" ] && load_env
 
-	echo_env_vars
+cd /tmp
 
-	cd /tmp
-	curl -Ls https://gbjs.serv00.net/cftunnel.sh | bash
+curl -Ls https://gbjs.serv00.net/cftunnel.sh | bash
+
 }
 
 # ============================================================
-# 主流程
+# 主函数
 # ============================================================
+
 run_remote() {
 
-	if [ -z "${PROOT_DIR}" ]; then
-		source /home/container/.bashrc 2>/dev/null || true
-	fi
+if [ -z "$PROOT_DIR" ]; then
+source /home/container/.bashrc 2>/dev/null || true
+fi
 
-	if [ -z "${PROOT_DIR}" ] || [ ! -d "${PROOT_DIR}" ]; then
-		setgamehostproot
-	fi
+if [ -z "$PROOT_DIR" ] || [ ! -d "$PROOT_DIR" ]; then
+setgamehostproot
+fi
 
-	if [ "$1" = "start" ]; then
-		run_gost_proxy start
-	else
-		run_gost_proxy stop
-	fi
 
-	runcftunnel "$1"
+if [ "$1" = "start" ]; then
+run_gost_proxy start
+else
+run_gost_proxy stop
+fi
 
-	cd "${PROOT_DIR}"
 
-	_VNC_RES="${VNC_RESOLUTION:-720x1280}"
-	_VNC_W=$(echo "$_VNC_RES" | cut -d'x' -f1)
-	_VNC_H=$(echo "$_VNC_RES" | cut -d'x' -f2)
+runcftunnel "$1"
 
-	_VNC_DEPTH="${VNC_DEPTH:-16}"
+cd "$PROOT_DIR"
 
-	_CM_PORT="${CM_PORT:-9020}"
-	_CM_PASS="${CM_PASS:-}"
+_VNC_RES="${VNC_RESOLUTION:-720x1280}"
 
-	INNER_SCRIPT_PATH="${PROOT_DIR}/rootfs/root/runchrome_runit.sh"
+_VNC_W=$(echo "$_VNC_RES" | cut -d'x' -f1)
+_VNC_H=$(echo "$_VNC_RES" | cut -d'x' -f2)
+
+_VNC_DEPTH="${VNC_DEPTH:-16}"
+
+_CM_PORT="${CM_PORT:-9020}"
+_CM_PASS="${CM_PASS:-}"
+
+
+INNER_SCRIPT_PATH="${PROOT_DIR}/rootfs/root/runchrome_runit.sh"
 
 cat > "$INNER_SCRIPT_PATH" << INNEREOF
 #!/bin/sh
@@ -160,46 +185,43 @@ VNC_RESOLUTION="\${VNC_W}x\${VNC_H}"
 
 generate_caddy_config() {
 
-  [ -z "\$CM_PASS" ] && return
+HASH=\$(caddy hash-password --plaintext "\$CM_PASS")
 
-  HASH=\$(caddy hash-password --plaintext "\$CM_PASS")
+cat > Caddyfile << EOF
 
-  cat > Caddyfile << EOF
 :\$CM_PORT {
 
-  @protected {
-    not path /websockify*
-  }
-
-  basicauth @protected {
-    chromium \$HASH
-  }
-
-  root * ./novnc
-  file_server
-
-  handle_path /websockify* {
-    reverse_proxy localhost:5902
-  }
+@protected {
+not path /websockify*
 }
+
+basicauth @protected {
+chromium \$HASH
+}
+
+root * ./novnc
+file_server
+
+handle_path /websockify* {
+reverse_proxy localhost:5902
+}
+
+}
+
 EOF
 
 }
 
 enable_autoconnect() {
 
-  file=\$1
-
-  sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize", "scale");/' \$file || true
-  sed -i 's/UI.initSetting("autoconnect".*/UI.initSetting("autoconnect", true);/' \$file || true
+sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize", "scale");/' \$1 || true
+sed -i 's/UI.initSetting("autoconnect".*/UI.initSetting("autoconnect", true);/' \$1 || true
 
 }
 
 start_services() {
 
-echo "启动 Chromium + VNC..."
-
-if ! command -v chromium-browser >/dev/null 2>&1; then
+echo "启动 Chrome"
 
 apk update
 
@@ -208,38 +230,45 @@ chromium \
 tigervnc \
 openbox \
 websockify \
-git curl wget bash \
-font-noto-cjk font-noto-emoji \
-mesa mesa-gl \
-caddy
+caddy \
+git curl wget
 
-fi
-
-pkill Xvnc || true
+pkill -9 Xvnc 2>/dev/null || true
 
 rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1 || true
+
 
 export SERVICECMD="Xvnc :1 -geometry \${VNC_RESOLUTION} -depth \${VNC_DEPTH} -SecurityTypes None"
 curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s start
 
+
 export DISPLAY=:1
 sleep 2
+
 
 export SERVICECMD="openbox"
 curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
 
-export SERVICECMD="chromium-browser --no-sandbox --window-size=\${VNC_W},\${VNC_H}"
+
+export SERVICECMD="chromium-browser \
+--no-sandbox \
+--window-size=\${VNC_W},\${VNC_H} \
+--disable-dev-shm-usage \
+--disable-gpu"
+
 curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
+
 
 cd /root
 
-[ ! -d novnc ] && git clone --depth=1 https://github.com/novnc/noVNC.git novnc
+[ ! -d novnc ] && git clone --depth=1 https://github.com/novnc/noVNC.git
 
 cd novnc
 
 [ -f vnc.html ] && mv vnc.html index.html
 
 enable_autoconnect index.html
+
 
 if [ -z "\$CM_PASS" ]; then
 
@@ -252,6 +281,7 @@ export SERVICECMD="websockify 5902 localhost:5901"
 curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
 
 cd /root
+
 generate_caddy_config
 
 export SERVICECMD="caddy run --config /root/Caddyfile"
@@ -271,15 +301,26 @@ rm -rf /etc/service
 }
 
 case "\$MODE" in
-start) start_services ;;
-stop) stop_services ;;
+
+start)
+start_services
+;;
+
+stop)
+stop_services
+;;
+
 esac
 
 INNEREOF
 
+
 chmod +x "$INNER_SCRIPT_PATH"
 
+
+[ -e /tmp/cm_pipe ] && rm -f /tmp/cm_pipe
 mkfifo /tmp/cm_pipe
+
 
 PROOT_STARTED=1 nohup ./proot \
 -S ./rootfs \
@@ -292,11 +333,18 @@ sh /root/runchrome_runit.sh \"$1\"
 echo '__CHROME_DONE__'
 " > /tmp/cm_pipe 2>&1 &
 
-while read line
+
+echo "初始化 Chrome..."
+
+while IFS= read -r line
 do
-echo "\$line"
-[ "\$line" = "__CHROME_DONE__" ] && break
+
+echo "$line"
+
+[ "$line" = "__CHROME_DONE__" ] && break
+
 done < /tmp/cm_pipe
+
 
 rm -f /tmp/cm_pipe
 
@@ -304,6 +352,10 @@ echo "Chrome 已启动"
 echo "端口: ${_CM_PORT}"
 
 }
+
+# ============================================================
+# CLI
+# ============================================================
 
 case "$1" in
 
@@ -316,17 +368,23 @@ run_remote stop
 ;;
 
 restart)
+
 run_remote stop
 sleep 2
 run_remote start
+
 ;;
 
 status)
+
 run_remote status
+
 ;;
 
 *)
+
 echo "用法: $0 {start|stop|restart|status}"
+
 ;;
 
 esac
