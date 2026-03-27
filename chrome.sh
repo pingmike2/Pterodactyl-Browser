@@ -128,7 +128,7 @@ run_remote() {
 	cd "${PROOT_DIR}"
 
 	# 解析分辨率（用 cut 兼容 busybox sh，避免 Bad substitution）
-	_VNC_RES="${VNC_RESOLUTION:-1920x1080}"
+	_VNC_RES="${VNC_RESOLUTION:-720x1280}"
 	_VNC_W=$(echo "$_VNC_RES" | cut -d'x' -f1)
 	_VNC_H=$(echo "$_VNC_RES" | cut -d'x' -f2)
 	_VNC_DEPTH="${VNC_DEPTH:-16}"
