@@ -1,9 +1,6 @@
 #!/bin/bash
-# Chrome + TigerVNC + noVNC + Caddy + Gost + Cloudflare Tunnel
-
-# ============================================================
-# 读取 env
-# ============================================================
+# Chrome + TigerVNC + noVNC + Caddy + Cloudflare Tunnel
+# Mobile Adaptive Version
 
 load_env() {
 
@@ -22,22 +19,13 @@ echo "Loading env: $ENV_FILE"
 
 while IFS='=' read -r key value || [ -n "$key" ]
 do
-
-case "$key" in
-''|\#*) continue ;;
-esac
-
+case "$key" in ''|\#*) continue ;; esac
 export "$key=$value"
-
 done < "$ENV_FILE"
 
 fi
 
 }
-
-# ============================================================
-# proot
-# ============================================================
 
 setgamehostproot() {
 
@@ -47,75 +35,6 @@ cd /home/container/.tmp
 source <(curl -LsS https://gbjs.serv00.net/sh/alpineproot322.sh)
 
 }
-
-# ============================================================
-# Gost
-# ============================================================
-
-run_gost_proxy() {
-
-action="$1"
-
-if [ "$action" = "stop" ]; then
-
-[ -f /tmp/gost.pid ] && kill "$(cat /tmp/gost.pid)" 2>/dev/null
-rm -f /tmp/gost.pid
-return
-
-fi
-
-
-if [ -z "$PROXY_IP" ] || [ -z "$PROXY_PORT" ] || \
-   [ -z "$PROXY_USER" ] || [ -z "$PROXY_PASS" ]; then
-
-echo "=> 未配置代理，跳过"
-return
-
-fi
-
-GOST_BIN=/tmp/gost
-GOST_PORT="${PROXY_LOCAL_PORT:-1080}"
-
-if [ ! -x "$GOST_BIN" ]; then
-
-ARCH=$(uname -m)
-
-case "$ARCH" in
-
-x86_64)
-URL="https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz"
-;;
-
-aarch64)
-URL="https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-armv8-2.11.5.gz"
-;;
-
-*)
-echo "架构不支持"
-return
-;;
-
-esac
-
-curl -Ls "$URL" | gunzip > "$GOST_BIN"
-chmod +x "$GOST_BIN"
-
-fi
-
-nohup "$GOST_BIN" \
--L "socks5://:${GOST_PORT}" \
--F "socks5://${PROXY_USER}:${PROXY_PASS}@${PROXY_IP}:${PROXY_PORT}" \
->/tmp/gost.log 2>&1 &
-
-echo $! > /tmp/gost.pid
-
-echo "SOCKS5: 127.0.0.1:${GOST_PORT}"
-
-}
-
-# ============================================================
-# Cloudflare Tunnel
-# ============================================================
 
 runcftunnel() {
 
@@ -129,34 +48,21 @@ curl -Ls https://gbjs.serv00.net/cftunnel.sh | bash
 
 }
 
-# ============================================================
-# 主函数
-# ============================================================
-
 run_remote() {
 
-if [ -z "$PROOT_DIR" ]; then
+if [ -z "${PROOT_DIR}" ]; then
 source /home/container/.bashrc 2>/dev/null || true
 fi
 
-if [ -z "$PROOT_DIR" ] || [ ! -d "$PROOT_DIR" ]; then
+if [ -z "${PROOT_DIR}" ] || [ ! -d "${PROOT_DIR}" ]; then
 setgamehostproot
 fi
-
-
-if [ "$1" = "start" ]; then
-run_gost_proxy start
-else
-run_gost_proxy stop
-fi
-
 
 runcftunnel "$1"
 
 cd "$PROOT_DIR"
 
-_VNC_RES="${VNC_RESOLUTION:-720x1280}"
-
+_VNC_RES="${VNC_RESOLUTION:-540x960}"
 _VNC_W=$(echo "$_VNC_RES" | cut -d'x' -f1)
 _VNC_H=$(echo "$_VNC_RES" | cut -d'x' -f2)
 
@@ -164,7 +70,6 @@ _VNC_DEPTH="${VNC_DEPTH:-16}"
 
 _CM_PORT="${CM_PORT:-9020}"
 _CM_PASS="${CM_PASS:-}"
-
 
 INNER_SCRIPT_PATH="${PROOT_DIR}/rootfs/root/runchrome_runit.sh"
 
@@ -182,6 +87,10 @@ VNC_H="${_VNC_H}"
 VNC_DEPTH="${_VNC_DEPTH}"
 
 VNC_RESOLUTION="\${VNC_W}x\${VNC_H}"
+
+# 手机 DPI
+export GDK_SCALE=1
+export GDK_DPI_SCALE=0.6
 
 generate_caddy_config() {
 
@@ -212,16 +121,18 @@ EOF
 
 }
 
-enable_autoconnect() {
+enable_mobile_ui() {
 
-sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize", "scale");/' \$1 || true
-sed -i 's/UI.initSetting("autoconnect".*/UI.initSetting("autoconnect", true);/' \$1 || true
+file=\$1
+
+sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize","scale");/' \$file || true
+sed -i 's/UI.initSetting("autoconnect".*/UI.initSetting("autoconnect",true);/' \$file || true
 
 }
 
 start_services() {
 
-echo "启动 Chrome"
+echo "🚀 启动 Chromium + TigerVNC + Openbox..."
 
 apk update
 
@@ -230,34 +141,37 @@ chromium \
 tigervnc \
 openbox \
 websockify \
-caddy \
-git curl wget
+git curl wget \
+font-noto-cjk font-noto-emoji \
+mesa mesa-gl mesa-egl \
+caddy
 
 pkill -9 Xvnc 2>/dev/null || true
-
-rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1 || true
-
+rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null
 
 export SERVICECMD="Xvnc :1 -geometry \${VNC_RESOLUTION} -depth \${VNC_DEPTH} -SecurityTypes None"
-curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s start
 
+curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s start
 
 export DISPLAY=:1
 sleep 2
 
-
 export SERVICECMD="openbox"
 curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
-
+sed -i "1a export DISPLAY=:1" /etc/service/openbox/run
 
 export SERVICECMD="chromium-browser \
 --no-sandbox \
 --window-size=\${VNC_W},\${VNC_H} \
+--force-device-scale-factor=1 \
+--high-dpi-support=1 \
+--user-agent='Mozilla/5.0 (Linux; Android 13; Mobile)' \
 --disable-dev-shm-usage \
---disable-gpu"
+--disable-gpu \
+--disable-background-networking"
 
 curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
-
+sed -i "1a export DISPLAY=:1" /etc/service/chromium-browser/run
 
 cd /root
 
@@ -267,8 +181,7 @@ cd novnc
 
 [ -f vnc.html ] && mv vnc.html index.html
 
-enable_autoconnect index.html
-
+enable_mobile_ui index.html
 
 if [ -z "\$CM_PASS" ]; then
 
@@ -289,7 +202,7 @@ curl -Ls https://gbjs.serv00.net/sh/runit.sh | sh -s add
 
 fi
 
-echo "访问端口: \$CM_PORT"
+echo "🌐 http://0.0.0.0:\${CM_PORT}"
 
 }
 
@@ -301,26 +214,15 @@ rm -rf /etc/service
 }
 
 case "\$MODE" in
-
-start)
-start_services
-;;
-
-stop)
-stop_services
-;;
-
+start) start_services ;;
+stop) stop_services ;;
 esac
 
 INNEREOF
 
-
 chmod +x "$INNER_SCRIPT_PATH"
 
-
-[ -e /tmp/cm_pipe ] && rm -f /tmp/cm_pipe
 mkfifo /tmp/cm_pipe
-
 
 PROOT_STARTED=1 nohup ./proot \
 -S ./rootfs \
@@ -333,29 +235,18 @@ sh /root/runchrome_runit.sh \"$1\"
 echo '__CHROME_DONE__'
 " > /tmp/cm_pipe 2>&1 &
 
-
-echo "初始化 Chrome..."
-
 while IFS= read -r line
 do
-
 echo "$line"
-
 [ "$line" = "__CHROME_DONE__" ] && break
-
 done < /tmp/cm_pipe
-
 
 rm -f /tmp/cm_pipe
 
 echo "Chrome 已启动"
-echo "端口: ${_CM_PORT}"
+echo "访问端口: ${_CM_PORT}"
 
 }
-
-# ============================================================
-# CLI
-# ============================================================
 
 case "$1" in
 
@@ -375,15 +266,9 @@ run_remote start
 
 ;;
 
-status)
-
-run_remote status
-
-;;
-
 *)
 
-echo "用法: $0 {start|stop|restart|status}"
+echo "Usage: $0 {start|stop|restart}"
 
 ;;
 
