@@ -30,4 +30,4 @@ jobs:
           context: .
           push: true
           # 这里已手动修正为全小写
-          tags: ghcr.io/losy-mify/pterodactyl-firefox:latest
+          tags: ghcr.io/${{ github.repository_owner }}/pterodactyl-firefox:latest
