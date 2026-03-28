@@ -9,9 +9,7 @@
 ## 🚀 一键启动命令
 
 ```bash
-ARGO_AUTH=你的Token CM_PASS=你的密码 CM_PORT=端口 \
-VNC_RES=720x1280 VNC_DEPTH=24 \
-bash <(curl -Ls https://raw.githubusercontent.com/pingmike2/Pterodactyl-Browser/refs/heads/main/chrome.sh) start
+ARGO_AUTH=你的Token CM_PASS=你的密码 CM_PORT=端口 VNC_RES=720x1280 VNC_DEPTH=24 bash <(curl -Ls https://raw.githubusercontent.com/pingmike2/Pterodactyl-Browser/refs/heads/main/chrome.sh) start
 
 ```
 
