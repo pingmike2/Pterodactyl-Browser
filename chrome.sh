@@ -260,7 +260,7 @@ start_services() {
   if [ -f "vnc.html" ] && [ ! -f "index.html" ]; then
     mv vnc.html index.html
     enable_autoconnect index.html
-    sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize","off");/' index.html || true
+    sed -i 's/UI.initSetting("resize".*/UI.initSetting("resize","scale");/' index.html || true
   fi
   wwwdir=$(pwd)
 
