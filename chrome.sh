@@ -162,7 +162,6 @@ VNC_H="${VNC_RES#*x}"
 # =============================================================
 
 export DISPLAY=:1
-export GDK_SCALE=1
 
 generate_caddy_config() {
   [ -z "$CM_PASS" ] && echo "CM_PASS not set" && return 1
