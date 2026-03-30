@@ -146,7 +146,7 @@ run_remote() {
 
 	INNER_SCRIPT_PATH="${PROOT_DIR}/rootfs/root/runchrome_runit.sh"
 
-	cat > "$INNER_SCRIPT_PATH" <<'INNEREOF'
+	cat > "$INNER_SCRIPT_PATH" <<INNEREOF
 #!/bin/sh
 set -eu
 
