@@ -46,7 +46,9 @@ ARGO_AUTH=你的Token CM_PASS=你的密码 CM_PORT=端口 VNC_RES=720x1280 VNC_D
 	•	端口是否与 CF 后台一致
 	•	分辨率乱改可能导致黑屏或卡盾
 
-	使用小技巧：
+	
+
+使用小技巧：
 	浏览器Settings  
 	左侧三条杠 On startup 
 	选择Continue where you left off
