@@ -50,4 +50,5 @@ ARGO_AUTH=你的Token CM_PASS=你的密码 CM_PORT=端口 VNC_RES=720x1280 VNC_D
 	浏览器Settings  
 	左侧三条杠 On startup 
 	选择Continue where you left off
+	会自动再游戏机重启后打开之前的标签页
 
