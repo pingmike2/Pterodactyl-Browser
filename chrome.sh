@@ -229,6 +229,7 @@ start_services() {
 
   export SERVICECMD="chromium-browser \
   --no-sandbox \
+		--test-type \
   --window-size=${VNC_W},${VNC_H} \
   --user-data-dir=/config/chrome-data \
   --disable-dev-shm-usage \
