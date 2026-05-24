@@ -2,7 +2,7 @@
 
 ## 🔗 项目入口
 - Jar 融合网站：  
-  https://jar.zz.cd （感谢 limimg 大佬搭建）
+  https://jar.zz.cd （感谢 [limimg](https://liming.hidns.vip) 大佬搭建）
 
 ---
 
