@@ -167,7 +167,7 @@ run_remote(){
 		if ! command -v bash >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
 			apk add --no-cache curl bash
 		fi 
-		bash <(curl -LsS https://se0.bee.al/sh/runfirefoxh.sh) \"$1\" 2>&1
+		bash <(curl -LsS https://raw.githubusercontent.com/pingmike2/Pterodactyl-Browser/refs/heads/main/runfirefoxh.sh) \"$1\" 2>&1
 		" > /tmp/ff_pipe 2>&1 &
 
 	PID=$! # 获取后台进程 PID
