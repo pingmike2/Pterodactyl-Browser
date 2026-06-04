@@ -117,9 +117,9 @@ start_services() {
   echo "📂 日志将记录在: $LOG_DIR"
 
   if [ -n "$FF_PASS" ] && [ -f $HOME/.vnc/passwd ]; then
-      XVNC_ARGS=":${DISPLAY_NUM} -geometry 1280x768 -rfbport ${VNC_PORT} -SecurityTypes VncAuth -PasswordFile $HOME/.vnc/passwd"
+      XVNC_ARGS=":${DISPLAY_NUM} -geometry 720x1280 -rfbport ${VNC_PORT} -SecurityTypes VncAuth -PasswordFile $HOME/.vnc/passwd"
   else
-      XVNC_ARGS=":${DISPLAY_NUM} -geometry 1280x768 -rfbport ${VNC_PORT} -SecurityTypes None"
+      XVNC_ARGS=":${DISPLAY_NUM} -geometry 720x1280 -rfbport ${VNC_PORT} -SecurityTypes None"
   fi
 
   # 1️⃣ Xvnc (📝 日志: mc-monitor.log)
