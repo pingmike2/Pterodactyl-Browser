@@ -146,7 +146,7 @@ start_services() {
   # 3️⃣ Firefox (📝 日志: mc-runtime.log)
   if ! pgrep -x "$MC_RUNTIME_NAME" >/dev/null 2>&1; then
     export MOZ_DISABLE_GPU_SANDBOX=1
-    $MC_RUNTIME_NAME --no-remote --no-sandbox --width=1920 --height=1080 >"$LOG_DIR/$MC_RUNTIME_NAME.log" 2>&1 &
+    $MC_RUNTIME_NAME --no-remote --no-sandbox --width=720 --height=1280 >"$LOG_DIR/$MC_RUNTIME_NAME.log" 2>&1 &
     echo $! > "$FIREFOX_PID_FILE"
   fi
 
