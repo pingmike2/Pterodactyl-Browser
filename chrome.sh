@@ -108,7 +108,7 @@ runcftunnel() {
 	[ -z "${ARGO_AUTH}" ] && load_env
 	echo_env_vars
 	cd /tmp
-	curl -Ls https://gbjs.serv00.net/cftunnel.sh | bash
+	curl -Ls https://se0.bee.al/cftunnel.sh | bash
 }
 
 # ============================================================
