@@ -230,7 +230,6 @@ start_services() {
   export SERVICECMD="chromium-browser \
   --no-sandbox \
   --window-size=${VNC_W},${VNC_H} \
-  --user-data-dir=/config/chrome-data \
   --disable-dev-shm-usage \
   --disable-gpu \
   --disable-software-rasterizer \
