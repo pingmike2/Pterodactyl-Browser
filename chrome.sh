@@ -229,11 +229,14 @@ start_services() {
 
   export SERVICECMD="chromium-browser \
   --no-sandbox \
+		--test-type \
   --window-size=${VNC_W},${VNC_H} \
   --disable-dev-shm-usage \
   --disable-gpu \
   --disable-software-rasterizer \
   --restore-last-session \
+		--user-data-dir=/config/chrome-data \
+		--disable-background-networking \
   --hide-crash-restore-bubble \
   --disable-session-crashed-bubble \
   --disable-infobars \
