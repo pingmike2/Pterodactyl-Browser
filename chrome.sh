@@ -229,9 +229,6 @@ start_services() {
 
   export SERVICECMD="chromium-browser \
     --no-sandbox \
-				--restore-last-session \
-				--user-data-dir=/config/chrome-data \
-				--no-first-run \
     --window-size=${VNC_W},${VNC_H} \
     --disable-dev-shm-usage \
     --disable-gpu \
