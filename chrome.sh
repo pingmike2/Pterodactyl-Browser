@@ -234,7 +234,6 @@ start_services() {
   --user-data-dir=/config/chrome-data \
   --disable-dev-shm-usage \
   --disable-gpu \
-  --disable-software-rasterizer \
   --disable-background-networking \
   --restore-last-session \
   --hide-crash-restore-bubble \
