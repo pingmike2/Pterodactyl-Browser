@@ -228,20 +228,16 @@ start_services() {
   sed -i "1a export DISPLAY=:1" /etc/service/openbox/run
 
   export SERVICECMD="chromium-browser \
-  --no-sandbox \
-		--test-type \
-  --window-size=${VNC_W},${VNC_H} \
-  --user-data-dir=/config/chrome-data \
-  --disable-dev-shm-usage \
-  --disable-gpu \
-  --disable-background-networking \
-  --restore-last-session \
-  --hide-crash-restore-bubble \
-  --disable-session-crashed-bubble \
-  --disable-infobars \
-  --no-first-run \
-  --disable-features=Translate,BackForwardCache \
-  --js-flags=--max-old-space-size=1024"
+    --no-sandbox \
+				--restore-last-session \
+				--user-data-dir=/config/chrome-data \
+				--no-first-run \
+    --window-size=${VNC_W},${VNC_H} \
+    --disable-dev-shm-usage \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-background-networking \
+    --js-flags=--max-old-space-size=1024"
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s add
   mkdir -p "$PWD/.cache"
   sed -i "1a export TMPDIR=$PWD/.cache" /etc/service/chromium-browser/run
@@ -286,24 +282,9 @@ start_services() {
 }
 
 stop_services() {
-  echo "🛑 正在优雅关闭 Chromium..."
-
-  # 优雅关闭浏览器
-  pkill -15 chromium-browser 2>/dev/null || true
-  pkill -15 chrome 2>/dev/null || true
-
-  # 等待 session 保存
-  sleep 5
-
   echo "🛑 停止所有服务..."
   (curl -LsSk https://gbjs.serv00.net/sh/runit.sh) | sh -s stop
-
-  # 清理残留进程
-  pkill -9 chromium-browser 2>/dev/null || true
-  pkill -9 chrome 2>/dev/null || true
-
   rm -rf /etc/service
-
   echo "✅ 所有进程已清理"
 }
 
