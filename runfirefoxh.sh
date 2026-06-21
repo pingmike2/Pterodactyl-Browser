@@ -135,7 +135,7 @@ start_services() {
   done
 
   [ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
-  curl -LSs https://se0.bee.al/tar/menuh.xml -o ~/.config/openbox/menu.xml >/dev/null 2>&1 || true
+  curl -LSs https://gbjs.serv00.net/tar/menuh.xml -o ~/.config/openbox/menu.xml >/dev/null 2>&1 || true
 
   # 2️⃣ Openbox (📝 日志: mc-box.log)
   if ! pgrep -x "$MC_BOX_NAME" >/dev/null 2>&1; then
