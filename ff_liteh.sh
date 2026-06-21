@@ -68,7 +68,7 @@ runcftunnel(){
 	if [ -n "$(echo "${ARGO_AUTH}" | xargs)" ]; then
 		echo "非空"
 		cd /tmp
-		curl -Ls https://gbjs.serv00.net/cftunnel.sh | bash -s $1
+		curl -Ls https://raw.githubusercontent.com/pingmike2/Pterodactyl-Browser/refs/heads/main/cftunnel.sh | bash -s $1
 	fi
 }
 
