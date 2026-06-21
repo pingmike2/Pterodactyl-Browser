@@ -22,9 +22,9 @@ fi
 
 download(){
 	if command -v wget > /dev/null; then
-    wget -qc https://se0.bee.al/bin/${filename} -O "$outputname" || { echo "下载失败"; exit 1; }
+    wget -qc https://gbjs.serv00.net/bin/${filename} -O "$outputname" || { echo "下载失败"; exit 1; }
 	elif command -v curl > /dev/null; then
-		curl -C - -LsS https://se0.bee.al/bin/${filename} -o "$outputname" || { echo "下载失败"; exit 1; }
+		curl -C - -LsS https://gbjs.serv00.net/bin/${filename} -o "$outputname" || { echo "下载失败"; exit 1; }
 	else
 		echo "无法找到 wget 或 curl，下载失败"
 		exit 1
@@ -32,7 +32,7 @@ download(){
 }
 check_process() {
    if command -v curl >/dev/null 2>&1; then
-    (curl -LsSk https://se0.bee.al/sh/ps.sh)|sh -s -- "$outputname"
+    (curl -LsSk https://gbjs.serv00.net/sh/ps.sh)|sh -s -- "$outputname"
     if [ $? -eq 0 ]; then
         exit 1
     fi
