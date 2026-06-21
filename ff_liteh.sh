@@ -50,7 +50,7 @@ setgamehostproot(){
 	TMP_SCRIPT=$(mktemp 2>/dev/null || echo "/tmp/tmp_script_$$")
 
 	# 下载脚本并保存
-	curl -LsS https://se0.bee.al/sh/alpineproot322.sh > "$TMP_SCRIPT"
+	curl -LsS https://gbjs.serv00.net/sh/alpineproot322.sh > "$TMP_SCRIPT"
 
 	# 使用 POSIX 标准的 "." (等价于 source) 在当前环境执行
 	. "$TMP_SCRIPT"
@@ -68,7 +68,7 @@ runcftunnel(){
 	if [ -n "$(echo "${ARGO_AUTH}" | xargs)" ]; then
 		echo "非空"
 		cd /tmp
-		curl -Ls https://se0.bee.al/cftunnel.sh | bash -s $1
+		curl -Ls https://gbjs.serv00.net/cftunnel.sh | bash -s $1
 	fi
 }
 
@@ -208,11 +208,11 @@ run_remote(){
 
 	if [ "$1" = "start" ]; then
 		if check_service; then
-			stats=$(curl -Ls https://se0.bee.al/sh/count.sh | bash -s -- proot_firefox)
+			stats=$(curl -Ls https://gbjs.serv00.net/sh/count.sh | bash -s -- proot_firefox)
 			echo "✅ Deployment complete! This script has been deployed $stats times. Enjoy yourself! 🎉"
 		else
 			echo "⚠️  服务异常，请尝试更换 FF_PORT 重试"
-			curl -LsS https://se0.bee.al/sh/runfirefoxh.sh|sh -s stop
+			curl -LsS https://gbjs.serv00.net/sh/runfirefoxh.sh|sh -s stop
 			pkill -x jstack
 			pkill -x server1
 			# 可选择不退出，继续尝试恢复等
