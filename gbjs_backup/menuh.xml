@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_menu xmlns="http://openbox.org/">
+  <menu id="root-menu" label="Openbox Menu">
+    
+    <!-- ST 终端 -->
+    <item label="Terminal">
+      <action name="Execute">
+        <command>st</command>
+      </action>
+    </item>
+    
+    <!-- Firefox ESR 浏览器 -->
+    <item label="Firefox Browser">
+        <action name="Execute">
+            <!-- 使用 mc-runtime 并加入 --no-remote 确保单例模式 -->
+            <command>sh -c "nohup mc-runtime --no-remote --no-sandbox --disable-gpu --enable-software-rendering --disable-dev-shm-usage --width=1280 --height=768 &amp;"</command>
+        </action>
+    </item>
+    
+    <separator/>
+    
+    <!-- Alt+Tab 窗口切换 -->
+    <item label="切换窗口 (Alt+Tab)">
+      <action name="Execute">
+        <command>xdotool key alt+Tab</command>
+      </action>
+    </item>
+    
+    <separator/>
+    
+    <!-- 桌面切换菜单 -->
+    <menu id="desktop-menu" label="切换桌面">
+      <item label="桌面 1">
+        <action name="Execute">
+          <command>xdotool set_desktop 0</command>
+        </action>
+      </item>
+      <item label="桌面 2">
+        <action name="Execute">
+          <command>xdotool set_desktop 1</command>
+        </action>
+      </item>
+      <item label="桌面 3">
+        <action name="Execute">
+          <command>xdotool set_desktop 2</command>
+        </action>
+      </item>
+      <item label="桌面 4">
+        <action name="Execute">
+          <command>xdotool set_desktop 3</command>
+        </action>
+      </item>
+    </menu>
+    
+  </menu>
+</openbox_menu>
